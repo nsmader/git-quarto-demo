@@ -1,0 +1,225 @@
+---
+title: "Community-Level Health Insurance Coverage by Race and Foreign-Born Status"
+format: docx
+editor: visual
+bibliography: health-insurance-citations.bib
+csl: apa_6th.csl
+  # this csl file creating using a copy of text from this file
+  # https://github.com/citation-style-language/styles/blob/master/apa-6th-edition.csl
+  # under the Citation Style Language open-source repo: https://github.com/citation-style-language
+number-sections: true
+execute: 
+  echo: false
+  message: false
+  error: false
+---
+
+```{r}
+#| label: load necessary packages and values
+packages_list <- c("tidycensus", # for pulling census data
+                   "tigris",     # for pulling census shape files
+                   "sf",         # for handling shape files
+                   "ggplot2",    # for plotting 
+                   "scales",     # for scaling values
+                   "dplyr",      # for data manipulation
+                   "tidyr",      # for data reshaping
+                   "broom",      # for easy processing of regression output
+                   "flextable"   # for display tables
+                   )
+
+# Quietly load each package, and install them if not already available
+for (p in packages_list) {
+  if (!p %in% installed.packages()[, "Package"]) install.packages(p)
+  suppressPackageStartupMessages(library(p, 
+                                         character.only = TRUE,
+                                         verbose = FALSE))
+}
+```
+
+```{r}
+#| label: pull and instatiate census key
+if (file.exists("profile.R")) {
+  source("profile.R")
+  census_api_key(census_key)
+} else {
+  message("A `profile.R` script was not found in the working directory. You need to
+          create that according to the instructions of the README for this repository
+          in order to run this code.\n\nSee: https://github.com/nsmader/git-quarto-demo")  
+  stop()
+}
+```
+
+```{r}
+#| label: set options
+
+my_state  <- "Georgia"
+my_county <- "Fulton" 
+  # For use in the text below, provide only the name of the county, and omit
+  # "County". E.g., to specify "Cook County", just write "Cook"
+acs_year <- 2021
+  # This is the year of American Community Survey data to draw on
+```
+
+# Introduction
+
+Health Insurance is good, but there are disparities. This exercise looks at data from the `r acs_year` release of the American Community Survey for `r my_county` in `r my_state` to examine spatial trends in lack of health care coverage for individuals aged 35-44, and patterns of association with Black identity and foreign born status.
+
+Consider this paper to be a counterpart to @thamer_health_1997.
+
+# Data
+
+We pull data from the American Community Survey 5-Year release on:
+
+* Health Insurance Coverage By Sex And Age ([Table B27001](https://www.socialexplorer.com/data/ACS2021_5yr/metadata/?ds=ACS21_5yr&table=B27010))
+* Hispanic Or Latino Origin By Race ([Table B03002](https://www.socialexplorer.com/data/ACS2021_5yr/metadata/?ds=ACS21_5yr&table=B03002))
+* Sex By Age For the Foreign-Born Population ([Table B05013](https://www.socialexplorer.com/data/ACS2021_5yr/metadata/?ds=ACS21_5yr&table=B05013))
+
+```{r}
+#| label: pull census data
+
+# For reference, see https://walker-data.com/tidycensus/articles/basic-usage.html
+
+acs <- 
+  get_acs(state     = my_state, 
+          county    = my_county,
+          geography = "tract", 
+          variables = c(pop_35to44_male         = "B27001_015",
+                        pop_35to44_noins_male   = "B27001_017",
+                        pop_35to44_female       = "B27001_043",
+                        pop_35to44_noins_female = "B27001_045",
+                        
+                        pop_35to39_foreignborn_male   = "B05013_010",
+                        pop_40to44_foreignborn_male   = "B05013_011",
+                        pop_35to39_foreignborn_female = "B05013_029",
+                        pop_40to44_foreignborn_female = "B05013_030",
+
+                        pop           = "B03002_001",
+                        pop_blacknonh = "B03002_004"),
+          year = acs_year) |>
+  select(-moe) |>
+  pivot_wider(names_from = "variable",
+              values_from = "estimate") |>
+  mutate(pop_35to44       = pop_35to44_male       + pop_35to44_female,
+         pop_35to44_noins = pop_35to44_noins_male + pop_35to44_noins_female,
+         pct_35to44_noins = pop_35to44_noins / pop_35to44,
+         
+         pop_35to44_foreignborn = 
+           pop_35to39_foreignborn_male +
+           pop_35to39_foreignborn_female +
+           pop_40to44_foreignborn_male +
+           pop_40to44_foreignborn_female,
+         pct_35to44_foreignborn = pop_35to44_foreignborn / pop_35to44,
+         
+         pct_blacknonh = pop_blacknonh / pop) |>
+  select(GEOID, pop_35to44, pct_35to44_noins, pct_35to44_foreignborn, pct_blacknonh)
+```
+
+```{r}
+#| label: pull census shape files and merge in 
+
+my_tracts <- 
+  tracts(state = my_state, 
+         county = my_county,
+         cb = TRUE,
+         progress_bar = FALSE)
+
+tract_data <- 
+  merge(my_tracts,
+        acs,
+        by = "GEOID")
+```
+
+
+# Spatial Patterns in `r my_county` County {#sec-maps}
+
+```{r}
+#| label: develop plotting function
+
+map_field <- function(field, vir_color = "viridis") {
+  ggplot(tract_data) +
+  geom_sf(aes(fill = get(field)),
+          color = NA) +
+  scale_fill_viridis_c(name = "",
+                       labels = percent,
+                       option = vir_color) +
+  theme_void()
+}
+```
+
+## Uninsured Status
+
+Figure @fig-uninsured shows rates of uninsured populations age 35-44 in census tracts across `r my_county`.
+
+```{r fig.cap = paste0("Percent Uninsured in ", my_county, " County, Age 35-44")}
+#| label: fig-uninsured
+#| fig-width: 4
+map_field("pct_35to44_noins")
+```
+
+## Race and Foreign-Born Identities
+
+Next we examine other community characteristics.
+
+```{r fig.cap = paste0("Demographic Characteristics of ", my_county, " County")}
+#| label: fig-demographics
+#| fig-cap-location: top
+#| layout-nrow: 1
+#| fig-subcap: 
+#|   - "Percent Black Non-Hispanic"
+#|   - "Percent Foreign Born, Age 35-44"
+
+map_field("pct_blacknonh", 
+          vir_color = "magma")
+
+map_field("pct_35to44_foreignborn",
+          vir_color = "magma")
+```
+
+Maps @fig-demographics-1 and @fig-demographics-2 show distinctive patterns.
+
+# Statistical Associations
+
+We use statistical regression methods to examine the associations between the rate of uninsured individuals and the community characteristics displayed in section @sec-maps.
+
+The equation for Ordinary Least Squares is:
+
+$$\hat{\beta}=(X^{\prime}X)^{-1}X^{\prime}Y$$ {#eq-ols}
+
+@eq-ols is a classic.
+
+```{r}
+#| label: run regression
+reg <- lm(pct_35to44_noins ~ pct_35to44_foreignborn + pct_blacknonh, 
+          data = acs,
+          weights = pop_35to44)
+
+coeffs <- tidy(reg)
+```
+
+Table 1 shows that community composition in both foreign-born status and black non-Hispanic identity are significantly related to community uninsured status.
+
+```{r}
+#| label: tbl-reg
+#| tbl-cap: "Associations of Rate of Uninsured vs Community Characteristics"
+
+coeffs |>
+  mutate(term = recode(term, 
+                       "pct_35to44_foreignborn" = "% Foreign Born, Age 35-44",
+                       "pct_blacknonh"          = "% Black Non-Hispanic")) |>
+  flextable() |> 
+  set_header_labels(term = "",
+                    estimate = "Estimate",
+                    std.error = "Std. Err.",
+                    statistic = "t-stat",
+                    p.value    = "p-value") |>
+  colformat_double(digits = 3) |>
+  width(j = "term",
+        width = 2)
+```
+
+
+# References
+
+::: {#refs}
+:::
+
