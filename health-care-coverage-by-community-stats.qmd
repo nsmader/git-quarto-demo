@@ -24,7 +24,7 @@ packages_list <- c("tidycensus", # for pulling census data
                    "dplyr",      # for data manipulation
                    "tidyr",      # for data reshaping
                    "broom",      # for easy processing of regression output
-                   "flextable"   # for display tables
+                   "flextable"   # for attractive table display
                    )
 
 # Quietly load each package, and install them if not already available
@@ -99,10 +99,13 @@ acs <-
   select(-moe) |>
   pivot_wider(names_from = "variable",
               values_from = "estimate") |>
-  mutate(pop_35to44       = pop_35to44_male       + pop_35to44_female,
+  mutate(
+         # Develop uninsured status
+         pop_35to44       = pop_35to44_male       + pop_35to44_female,
          pop_35to44_noins = pop_35to44_noins_male + pop_35to44_noins_female,
          pct_35to44_noins = pop_35to44_noins / pop_35to44,
          
+         # Develop foreign-born status
          pop_35to44_foreignborn = 
            pop_35to39_foreignborn_male +
            pop_35to39_foreignborn_female +
@@ -110,6 +113,7 @@ acs <-
            pop_40to44_foreignborn_female,
          pct_35to44_foreignborn = pop_35to44_foreignborn / pop_35to44,
          
+         # Develop race/ethnicity
          pct_blacknonh = pop_blacknonh / pop) |>
   select(GEOID, pop_35to44, pct_35to44_noins, pct_35to44_foreignborn, pct_blacknonh)
 ```
