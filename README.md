@@ -4,7 +4,7 @@ This is a repository used to demonstrate features of both Quarto and GitHub as p
 
 # Running this code
 
-To successfully run this code, you must create your own `profile.R` script that is saved in the main working directory, with a single line:
+To successfully run this code, you must create a script called `profile.R` that is saved in the main working directory, which has the following code:
 
 ```
 census_key <- "xxx"
