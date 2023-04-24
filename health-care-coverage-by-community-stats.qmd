@@ -12,6 +12,7 @@ execute:
   echo: false
   message: false
   error: false
+  cache: false
 ---
 
 ```{r}
@@ -52,8 +53,8 @@ if (file.exists("profile.R")) {
 ```{r}
 #| label: set options
 
-my_state  <- "Georgia"
-my_county <- "Fulton" 
+my_state  <- "Washington"
+my_county <- "King" 
   # For use in the text below, provide only the name of the county, and omit
   # "County". E.g., to specify "Cook County", just write "Cook"
 acs_year <- 2021
@@ -218,7 +219,8 @@ coeffs |>
                     p.value    = "p-value") |>
   colformat_double(digits = 3) |>
   width(j = "term",
-        width = 2)
+        width = 2) |>
+  set_caption(caption = "Title")
 ```
 
 
